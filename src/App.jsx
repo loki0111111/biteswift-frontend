@@ -48,6 +48,7 @@ import SupportPage from "./pages/Customers/SupportPage";
 import CustomerSettingsPage from "./pages/Customers/SettingsPage";
 import CustomerProtectedRoute from "./components/CustomerProtectedRoute";
 import PaymentCallbackPage from "./pages/Customers/PaymentCallbackPage";
+import ProductDetailPage from "./pages/Customers/ProductDetailPage";
 
 // ── Cart Conflict Modal ───────────────────────────────────────────────────────
 function CartConflictModal({ businessName, onConfirm, onCancel }) {
