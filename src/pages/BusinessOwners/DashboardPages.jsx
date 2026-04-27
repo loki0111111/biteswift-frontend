@@ -5,14 +5,19 @@
 // SettingsPage — connected to GET/PATCH /api/auth/profile
 
 // ============================================================
-// DeliveriesPage — CONNECTED TO BACKEND
-// GET /api/deliveries
-// POST /api/deliveries/assign
-// GET /api/deliveries/riders/available
+// SINGLE UNIFIED IMPORT — fixes all useWalletState / useWalletEffect errors
 // ============================================================
 
 import { useState, useEffect } from "react";
-import { Truck, ChevronRight, User, RefreshCw, X } from "lucide-react";
+import { Truck, ChevronRight, User, RefreshCw, X, Wallet, ArrowDownLeft, ArrowUpRight as ArrowUpRightW, Building2, RefreshCw as RefreshWallet, Bell as BellS, Shield, Store as StoreS, Save } from "lucide-react";
+import {
+  BarChart, Bar,
+  XAxis as AnalXAxis, YAxis as AnalYAxis,
+  CartesianGrid as AnalGrid, Tooltip as AnalTooltip,
+  ResponsiveContainer as AnalContainer,
+  LineChart as AnalLine, Line as AnalLineEl,
+} from "recharts";
+import { RefreshCw as AnalRefresh } from "lucide-react";
 
 const BASE_URL = "https://biteswift-qw3s.onrender.com";
 const getToken = () => localStorage.getItem("token");
@@ -105,6 +110,9 @@ function AssignRiderModal({ delivery, availableRiders, onAssign, onClose, assign
   );
 }
 
+// ============================================================
+// DeliveriesPage — CONNECTED TO BACKEND
+// ============================================================
 export function DeliveriesPage() {
   const [deliveries, setDeliveries] = useState([]);
   const [availableRiders, setAvailableRiders] = useState([]);
@@ -296,19 +304,13 @@ export function DeliveriesPage() {
 // ============================================================
 // WalletPage — CONNECTED TO BACKEND
 // ============================================================
-
-import { Wallet, ArrowDownLeft, ArrowUpRight as ArrowUpRightW, Building2, RefreshCw as RefreshWallet } from "lucide-react";
-import { useState as useWalletState, useEffect as useWalletEffect } from "react";
-
 export function WalletPage() {
-  const [walletData, setWalletData] = useWalletState(null);
-  const [transactions, setTransactions] = useWalletState([]);
-  const [loading, setLoading] = useWalletState(true);
-  const [txLoading, setTxLoading] = useWalletState(true);
-  const [withdrawing, setWithdrawing] = useWalletState(false);
-  const [withdrawAmount, setWithdrawAmount] = useWalletState("");
-  const [showWithdrawModal, setShowWithdrawModal] = useWalletState(false);
-  const [error, setError] = useWalletState(null);
+  const [walletData, setWalletData] = useState(null);
+  const [transactions, setTransactions] = useState([]);
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [txLoading, setTxLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const fetchWallet = async () => {
     setLoading(true);
@@ -324,6 +326,19 @@ export function WalletPage() {
       setError("Could not load wallet. Please try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchProfile = async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/profile`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (!res.ok) return;
+      const json = await res.json();
+      setProfile(json.data ?? json);
+    } catch (err) {
+      console.error("Could not load profile");
     }
   };
 
@@ -343,50 +358,27 @@ export function WalletPage() {
     }
   };
 
-  useWalletEffect(() => {
+  useEffect(() => {
     fetchWallet();
+    fetchProfile();
     fetchTransactions();
   }, []);
 
-  const handleWithdraw = async () => {
-    if (!withdrawAmount || isNaN(withdrawAmount) || Number(withdrawAmount) <= 0) {
-      alert("Please enter a valid amount.");
-      return;
-    }
-    setWithdrawing(true);
-    try {
-      const res = await fetch(`${BASE_URL}/api/wallet/withdraw`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${getToken()}`,
-        },
-        body: JSON.stringify({ amount: Number(withdrawAmount) }),
-      });
-      if (!res.ok) throw new Error("Withdrawal failed");
-      setShowWithdrawModal(false);
-      setWithdrawAmount("");
-      await fetchWallet();
-      await fetchTransactions();
-    } catch (err) {
-      alert("Withdrawal failed. Please try again.");
-    } finally {
-      setWithdrawing(false);
-    }
-  };
-
-  const balance = walletData?.balance ?? walletData?.availableBalance ?? 0;
   const totalEarned = walletData?.totalEarned ?? walletData?.totalCredit ?? 0;
-  const totalWithdrawn = walletData?.totalWithdrawn ?? walletData?.totalDebit ?? 0;
+  const totalOrders = walletData?.totalOrders ?? transactions.length ?? 0;
+
+  const bankName = profile?.bankName || null;
+  const accountNumber = profile?.bankAccountNumber || null;
+  const accountName = profile?.accountName || null;
 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Wallet</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Your earnings and withdrawal history</p>
+          <p className="text-sm text-gray-500 mt-0.5">Your earnings and transaction history</p>
         </div>
-        <button onClick={() => { fetchWallet(); fetchTransactions(); }}
+        <button onClick={() => { fetchWallet(); fetchProfile(); fetchTransactions(); }}
           className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all" title="Refresh">
           <RefreshWallet size={16} />
         </button>
@@ -403,20 +395,18 @@ export function WalletPage() {
         <div className="md:col-span-2 bg-[#111111] rounded-2xl p-6 text-white">
           <div className="flex items-center gap-2 mb-6">
             <Wallet size={18} className="text-orange-400" />
-            <span className="text-sm text-white/60">Available Balance</span>
+            <span className="text-sm text-white/60">Total Revenue</span>
           </div>
           {loading ? (
             <div className="h-10 bg-white/10 rounded-xl w-48 animate-pulse mb-6" />
           ) : (
-            <p className="text-4xl font-bold mb-1">₦{Number(balance).toLocaleString()}</p>
+            <p className="text-4xl font-bold mb-1">₦{Number(totalEarned).toLocaleString()}</p>
           )}
-          <p className="text-xs text-white/40 mb-6">Updated just now</p>
-          <button
-            onClick={() => setShowWithdrawModal(true)}
-            className="bg-[#F97316] text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-orange-600 transition-colors"
-          >
-            Withdraw to Bank
-          </button>
+          <p className="text-xs text-white/40 mb-6">Paid directly to your linked bank account</p>
+          <div className="flex items-center gap-2 bg-white/10 rounded-xl px-4 py-3">
+            <div className="w-2 h-2 bg-green-400 rounded-full" />
+            <p className="text-xs text-white/70">Payments are automatically sent to your bank via Paystack</p>
+          </div>
         </div>
 
         <div className="space-y-3">
@@ -428,15 +418,16 @@ export function WalletPage() {
             }
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 p-4">
-            <p className="text-xs text-gray-400 mb-1">Total Withdrawn</p>
+            <p className="text-xs text-gray-400 mb-1">Total Orders</p>
             {loading
               ? <div className="h-7 bg-gray-100 rounded-lg w-32 animate-pulse" />
-              : <p className="text-xl font-bold text-gray-900">₦{Number(totalWithdrawn).toLocaleString()}</p>
+              : <p className="text-xl font-bold text-gray-900">{Number(totalOrders).toLocaleString()}</p>
             }
           </div>
         </div>
       </div>
 
+      {/* Linked Bank Account */}
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -445,16 +436,28 @@ export function WalletPage() {
             </div>
             <div>
               <p className="text-xs text-gray-400">Linked Bank Account</p>
-              <p className="text-sm font-bold text-gray-800">
-                {walletData?.bankName || "GTBank"} •••• {walletData?.accountNumber?.slice(-4) || "****"}
-              </p>
-              <p className="text-xs text-gray-500">{walletData?.accountName || "Your Business"}</p>
+              {bankName ? (
+                <>
+                  <p className="text-sm font-bold text-gray-800">
+                    {bankName} •••• {accountNumber?.slice(-4)}
+                  </p>
+                  <p className="text-xs text-gray-500">{accountName}</p>
+                </>
+              ) : (
+                <p className="text-sm font-semibold text-red-400">No bank account linked yet</p>
+              )}
             </div>
           </div>
-          <button className="text-xs font-semibold text-[#F97316] hover:underline">Change</button>
+          <button
+            onClick={() => window.location.href = "/dashboard/settings"}
+            className="text-xs font-semibold text-[#F97316] hover:underline"
+          >
+            {bankName ? "Change" : "Add Bank"}
+          </button>
         </div>
       </div>
 
+      {/* Transaction History */}
       <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100">
           <h2 className="text-sm font-bold text-gray-800">Transaction History</h2>
@@ -510,38 +513,6 @@ export function WalletPage() {
           )}
         </div>
       </div>
-
-      {showWithdrawModal && (
-        <>
-          <div className="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm" onClick={() => setShowWithdrawModal(false)} />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-              <h2 className="font-bold text-gray-900 mb-1">Withdraw Funds</h2>
-              <p className="text-xs text-gray-400 mb-5">Available: ₦{Number(balance).toLocaleString()}</p>
-              <div className="mb-4">
-                <label className="text-xs font-semibold text-gray-600 block mb-1">Amount (₦)</label>
-                <input
-                  type="number"
-                  placeholder="Enter amount"
-                  value={withdrawAmount}
-                  onChange={(e) => setWithdrawAmount(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/30"
-                />
-              </div>
-              <div className="flex gap-3">
-                <button onClick={() => setShowWithdrawModal(false)}
-                  className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-700 font-semibold text-sm hover:bg-gray-50 transition-colors">
-                  Cancel
-                </button>
-                <button onClick={handleWithdraw} disabled={withdrawing}
-                  className="flex-1 py-2.5 bg-[#F97316] text-white rounded-xl font-semibold text-sm hover:bg-orange-600 transition-colors disabled:opacity-60">
-                  {withdrawing ? "Processing..." : "Withdraw"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
     </div>
   );
 }
@@ -550,21 +521,10 @@ export function WalletPage() {
 // ============================================================
 // AnalyticsPage — CONNECTED TO BACKEND
 // ============================================================
-
-import {
-  BarChart, Bar,
-  XAxis as AnalXAxis, YAxis as AnalYAxis,
-  CartesianGrid as AnalGrid, Tooltip as AnalTooltip,
-  ResponsiveContainer as AnalContainer,
-  LineChart as AnalLine, Line as AnalLineEl,
-} from "recharts";
-import { useState as useAnalyticsState, useEffect as useAnalyticsEffect } from "react";
-import { RefreshCw as AnalRefresh } from "lucide-react";
-
 export function AnalyticsPage() {
-  const [analytics, setAnalytics] = useAnalyticsState(null);
-  const [loading, setLoading] = useAnalyticsState(true);
-  const [error, setError] = useAnalyticsState(null);
+  const [analytics, setAnalytics] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const fetchAnalytics = async () => {
     setLoading(true);
@@ -583,7 +543,7 @@ export function AnalyticsPage() {
     }
   };
 
-  useAnalyticsEffect(() => { fetchAnalytics(); }, []);
+  useEffect(() => { fetchAnalytics(); }, []);
 
   const totalRevenue = analytics?.totalRevenue ?? analytics?.revenue ?? 0;
   const totalOrders = analytics?.totalOrders ?? analytics?.orders ?? 0;
@@ -684,18 +644,9 @@ export function AnalyticsPage() {
 
 // ============================================================
 // SettingsPage — CONNECTED TO BACKEND
-// GET /api/auth/profile  — load profile + businessType on mount
-// PATCH /api/auth/profile — save changes
-// POST /api/wallet/save-bank-details — save bank details + create subaccount
-// GET /api/wallet/banks — fetch Nigerian banks list
-// GET /api/wallet/resolve-account — verify account number
 // ============================================================
-
-import { useState as useStateS, useEffect as useEffectS } from "react";
-import { Bell as BellS, Shield, Store as StoreS, Save } from "lucide-react";
-
 export function SettingsPage() {
-  const [profile, setProfile] = useStateS({
+  const [profile, setProfile] = useState({
     name: "",
     email: "",
     phone: "",
@@ -704,40 +655,39 @@ export function SettingsPage() {
     image: "",
   });
 
-  const [imageFile, setImageFile] = useStateS(null);
-  const [imagePreview, setImagePreview] = useStateS(null);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
 
-  const [notifications, setNotifications] = useStateS({
+  const [notifications, setNotifications] = useState({
     newOrder: true,
     orderDelivered: true,
     lowStock: false,
     weeklyReport: true,
   });
 
-  // Bank details state
-  const [banks, setBanks] = useStateS([]);
-  const [bankDetails, setBankDetails] = useStateS({
+  const [banks, setBanks] = useState([]);
+  const [bankDetails, setBankDetails] = useState({
     bankAccountNumber: "",
     bankCode: "",
     bankName: "",
     accountName: "",
   });
-  const [resolving, setResolving] = useStateS(false);
-  const [savingBank, setSavingBank] = useStateS(false);
-  const [bankSaved, setBankSaved] = useStateS(false);
-  const [bankError, setBankError] = useStateS(null);
-  const [hasBankDetails, setHasBankDetails] = useStateS(false);
+  const [resolving, setResolving] = useState(false);
+  const [savingBank, setSavingBank] = useState(false);
+  const [bankSaved, setBankSaved] = useState(false);
+  const [bankError, setBankError] = useState(null);
+  const [hasBankDetails, setHasBankDetails] = useState(false);
 
-  const [loading, setLoading] = useStateS(true);
-  const [saving, setSaving] = useStateS(false);
-  const [saved, setSaved] = useStateS(false);
-  const [error, setError] = useStateS(null);
-  const [saveError, setSaveError] = useStateS(null);
-  const [activeTab, setActiveTab] = useStateS("Business Profile");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState(null);
+  const [saveError, setSaveError] = useState(null);
+  const [activeTab, setActiveTab] = useState("Business Profile");
 
   const tabs = ["Business Profile", "Bank Details", "Notifications", "Security"];
 
-  useEffectS(() => {
+  useEffect(() => {
     const fetchProfile = async () => {
       setLoading(true);
       setError(null);
@@ -757,7 +707,6 @@ export function SettingsPage() {
           image: data.image || "",
         });
 
-        // Set existing bank details if any
         if (data.bankAccountNumber) {
           setBankDetails({
             bankAccountNumber: data.bankAccountNumber,
@@ -846,7 +795,6 @@ export function SettingsPage() {
     }
   };
 
-  // Resolve account when account number is 10 digits and bank is selected
   const resolveAccount = async (accountNumber, bankCode) => {
     if (accountNumber.length !== 10 || !bankCode) return;
     setResolving(true);
@@ -1060,7 +1008,6 @@ export function SettingsPage() {
             Add your bank account details so your earnings can be tracked and paid out to you.
           </p>
 
-          {/* Bank Selector */}
           <div>
             <label className="text-xs font-semibold text-gray-600 block mb-1">Select Bank</label>
             <select
@@ -1075,7 +1022,6 @@ export function SettingsPage() {
             </select>
           </div>
 
-          {/* Account Number */}
           <div>
             <label className="text-xs font-semibold text-gray-600 block mb-1">Account Number</label>
             <input
@@ -1088,7 +1034,6 @@ export function SettingsPage() {
             />
           </div>
 
-          {/* Account Name — auto filled */}
           <div>
             <label className="text-xs font-semibold text-gray-600 block mb-1">Account Name</label>
             <div className="relative">
