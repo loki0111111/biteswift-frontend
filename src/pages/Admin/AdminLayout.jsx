@@ -37,7 +37,7 @@ const navItems = [
 
 export default function AdminLayout({ children }) {
   // Desktop: sidebar collapsed/expanded. Mobile: sidebar hidden/shown as overlay
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
   const [profileOpen, setProfileOpen] = useState(false);
   const location = useLocation();
 

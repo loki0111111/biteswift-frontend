@@ -19,7 +19,7 @@ const navItems = [
 ];
 
 export default function DashboardLayout({ children }) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profile, setProfile] = useState({ name: "", email: "", initials: "" });
   const location = useLocation();

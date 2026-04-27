@@ -348,18 +348,25 @@ export default function BrowseBusinessesPage({ searchQuery = "", onAddToCart }) 
               </div>
             )}
           </div>
-        ) : activeFilter !== "all" ? (
-          <div>
-            {categoryFilteredProducts.length > 0 && (
-              <div className="mb-8">
-                <h2 className="text-base sm:text-xl font-extrabold text-gray-900 mb-3">{typeEmoji(activeFilter)} {activeFilter} Products</h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-                  {categoryFilteredProducts.map(product => (
-                    <ProductCard key={product._id} product={product} onAddToCart={handleAddToCart} onClick={() => handleProductClick(product)} />
-                  ))}
+          ) : activeFilter !== "all" ? (
+            <div>
+              {loadingBusinesses ? (
+                <div className="mb-8">
+                  <div className="h-6 w-40 bg-gray-100 rounded animate-pulse mb-3" />
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                    {[...Array(6)].map((_, i) => <ProductSkeleton key={i} />)}
+                  </div>
                 </div>
-              </div>
-            )}
+              ) : categoryFilteredProducts.length > 0 && (
+                <div className="mb-8">
+                  <h2 className="text-base sm:text-xl font-extrabold text-gray-900 mb-3">{typeEmoji(activeFilter)} {activeFilter} Products</h2>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                    {categoryFilteredProducts.map(product => (
+                      <ProductCard key={product._id} product={product} onAddToCart={handleAddToCart} onClick={() => handleProductClick(product)} />
+                    ))}
+                  </div>
+                </div>
+              )}
             <div>
               <h2 className="text-base sm:text-xl font-extrabold text-gray-900 mb-3">{typeEmoji(activeFilter)} {activeFilter} Businesses</h2>
               {loadingBusinesses ? (
