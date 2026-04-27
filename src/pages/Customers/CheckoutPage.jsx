@@ -168,6 +168,7 @@ export default function CheckoutPage({ onClearCart }) {
           email: customerProfile.email,
           amount: totalAmount,
           orderId,
+          businessId,
         }),
       });
 
