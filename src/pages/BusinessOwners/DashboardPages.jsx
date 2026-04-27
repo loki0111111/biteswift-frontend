@@ -686,6 +686,9 @@ export function AnalyticsPage() {
 // SettingsPage — CONNECTED TO BACKEND
 // GET /api/auth/profile  — load profile + businessType on mount
 // PATCH /api/auth/profile — save changes
+// POST /api/wallet/save-bank-details — save bank details + create subaccount
+// GET /api/wallet/banks — fetch Nigerian banks list
+// GET /api/wallet/resolve-account — verify account number
 // ============================================================
 
 import { useState as useStateS, useEffect as useEffectS } from "react";
@@ -711,6 +714,20 @@ export function SettingsPage() {
     weeklyReport: true,
   });
 
+  // Bank details state
+  const [banks, setBanks] = useStateS([]);
+  const [bankDetails, setBankDetails] = useStateS({
+    bankAccountNumber: "",
+    bankCode: "",
+    bankName: "",
+    accountName: "",
+  });
+  const [resolving, setResolving] = useStateS(false);
+  const [savingBank, setSavingBank] = useStateS(false);
+  const [bankSaved, setBankSaved] = useStateS(false);
+  const [bankError, setBankError] = useStateS(null);
+  const [hasBankDetails, setHasBankDetails] = useStateS(false);
+
   const [loading, setLoading] = useStateS(true);
   const [saving, setSaving] = useStateS(false);
   const [saved, setSaved] = useStateS(false);
@@ -718,7 +735,7 @@ export function SettingsPage() {
   const [saveError, setSaveError] = useStateS(null);
   const [activeTab, setActiveTab] = useStateS("Business Profile");
 
-  const tabs = ["Business Profile", "Notifications", "Security"];
+  const tabs = ["Business Profile", "Bank Details", "Notifications", "Security"];
 
   useEffectS(() => {
     const fetchProfile = async () => {
@@ -739,47 +756,65 @@ export function SettingsPage() {
           businessType: data.businessType || "",
           image: data.image || "",
         });
+
+        // Set existing bank details if any
+        if (data.bankAccountNumber) {
+          setBankDetails({
+            bankAccountNumber: data.bankAccountNumber,
+            bankCode: data.bankCode || "",
+            bankName: data.bankName || "",
+            accountName: data.accountName || "",
+          });
+          setHasBankDetails(true);
+        }
       } catch (err) {
         setError("Could not load profile. Please refresh.");
       } finally {
         setLoading(false);
       }
     };
+
+    const fetchBanks = async () => {
+      try {
+        const res = await fetch(`${BASE_URL}/api/wallet/banks`, {
+          headers: { Authorization: `Bearer ${getToken()}` },
+        });
+        const json = await res.json();
+        setBanks(json.data || []);
+      } catch (err) {
+        console.error("Could not load banks list");
+      }
+    };
+
     fetchProfile();
+    fetchBanks();
   }, []);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
-    console.log("file picked:", file); // ✅ add this
     if (!file) return;
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
   };
 
   const handleSave = async () => {
-    console.log("imageFile:", imageFile);
-    console.log("sending as:", imageFile ? "FormData" : "JSON");
     setSaving(true);
     setSaveError(null);
     try {
       let res;
-
       if (imageFile) {
-        // Use FormData when image is included
         const formData = new FormData();
         formData.append("restaurantName", profile.name);
         formData.append("phoneNumber", profile.phone);
         formData.append("restaurantLocation", profile.address);
         formData.append("businessType", profile.businessType);
         formData.append("image", imageFile);
-
         res = await fetch(`${BASE_URL}/api/auth/profile`, {
           method: "PATCH",
           headers: { Authorization: `Bearer ${getToken()}` },
           body: formData,
         });
       } else {
-        // No image — use JSON as before
         res = await fetch(`${BASE_URL}/api/auth/profile`, {
           method: "PATCH",
           headers: {
@@ -794,24 +829,89 @@ export function SettingsPage() {
           }),
         });
       }
-
       if (!res.ok) throw new Error("Failed to save profile");
       const json = await res.json();
       const data = json.data ?? json;
-
-      // Update image in profile state if backend returned new image path
       if (data.image) {
         setProfile((prev) => ({ ...prev, image: data.image }));
         setImageFile(null);
         setImagePreview(null);
       }
-
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       setSaveError("Could not save changes. Please try again.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Resolve account when account number is 10 digits and bank is selected
+  const resolveAccount = async (accountNumber, bankCode) => {
+    if (accountNumber.length !== 10 || !bankCode) return;
+    setResolving(true);
+    setBankError(null);
+    try {
+      const res = await fetch(
+        `${BASE_URL}/api/wallet/resolve-account?account_number=${accountNumber}&bank_code=${bankCode}`,
+        { headers: { Authorization: `Bearer ${getToken()}` } }
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message);
+      setBankDetails((prev) => ({ ...prev, accountName: json.data.account_name }));
+    } catch (err) {
+      setBankError("Could not verify account. Check the details and try again.");
+      setBankDetails((prev) => ({ ...prev, accountName: "" }));
+    } finally {
+      setResolving(false);
+    }
+  };
+
+  const handleAccountNumberChange = (accountNumber) => {
+    setBankDetails((prev) => ({ ...prev, bankAccountNumber: accountNumber, accountName: "" }));
+    if (accountNumber.length === 10 && bankDetails.bankCode) {
+      resolveAccount(accountNumber, bankDetails.bankCode);
+    }
+  };
+
+  const handleBankChange = (bankCode) => {
+    const selectedBank = banks.find((b) => b.code === bankCode);
+    setBankDetails((prev) => ({
+      ...prev,
+      bankCode,
+      bankName: selectedBank?.name || "",
+      accountName: "",
+    }));
+    if (bankDetails.bankAccountNumber.length === 10) {
+      resolveAccount(bankDetails.bankAccountNumber, bankCode);
+    }
+  };
+
+  const handleSaveBankDetails = async () => {
+    if (!bankDetails.bankCode || !bankDetails.bankAccountNumber || !bankDetails.accountName) {
+      setBankError("Please complete all bank details and verify your account first.");
+      return;
+    }
+    setSavingBank(true);
+    setBankError(null);
+    try {
+      const res = await fetch(`${BASE_URL}/api/wallet/save-bank-details`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify(bankDetails),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message);
+      setBankSaved(true);
+      setHasBankDetails(true);
+      setTimeout(() => setBankSaved(false), 3000);
+    } catch (err) {
+      setBankError(err.message || "Failed to save bank details. Please try again.");
+    } finally {
+      setSavingBank(false);
     }
   };
 
@@ -822,8 +922,8 @@ export function SettingsPage() {
     </div>
   );
 
-  const currentImage = imagePreview || (profile.image 
-    ? (profile.image.startsWith("http") ? profile.image : `${BASE_URL}${profile.image}`) 
+  const currentImage = imagePreview || (profile.image
+    ? (profile.image.startsWith("http") ? profile.image : `${BASE_URL}${profile.image}`)
     : null);
 
   return (
@@ -833,7 +933,7 @@ export function SettingsPage() {
         <p className="text-sm text-gray-500 mt-0.5">Manage your account settings</p>
       </div>
 
-      <div className="flex gap-1 bg-white border border-gray-100 rounded-2xl p-1 w-fit">
+      <div className="flex gap-1 bg-white border border-gray-100 rounded-2xl p-1 w-fit flex-wrap">
         {tabs.map((t) => (
           <button key={t} onClick={() => setActiveTab(t)}
             className={`text-xs px-4 py-2 rounded-xl font-medium transition-all ${activeTab === t ? "bg-[#F97316] text-white" : "text-gray-500 hover:text-gray-800"}`}
@@ -843,6 +943,7 @@ export function SettingsPage() {
         ))}
       </div>
 
+      {/* ── Business Profile Tab ─────────────────────────────────── */}
       {activeTab === "Business Profile" && (
         <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-4">
           <div className="flex items-center gap-3 mb-2">
@@ -856,9 +957,7 @@ export function SettingsPage() {
             </div>
           )}
 
-          {/* ── Business Image Upload ───────────────────────────────── */}
           <div className="flex items-center gap-5 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-            {/* Image preview */}
             <div className="w-20 h-20 rounded-2xl border-2 border-dashed border-gray-200 bg-white flex items-center justify-center overflow-hidden shrink-0">
               {currentImage ? (
                 <img src={currentImage} alt="Business" className="w-full h-full object-cover rounded-2xl" />
@@ -866,19 +965,12 @@ export function SettingsPage() {
                 <StoreS size={28} className="text-gray-300" />
               )}
             </div>
-
-            {/* Upload info */}
             <div className="flex-1">
               <p className="text-sm font-bold text-gray-800 mb-0.5">Business Logo / Image</p>
               <p className="text-xs text-gray-400 mb-3">This will appear on your business listing. JPG or PNG, max 5MB.</p>
               <label className="cursor-pointer inline-flex items-center gap-2 bg-[#F97316] text-white text-xs font-semibold px-4 py-2 rounded-xl hover:bg-orange-600 transition-colors">
                 {imageFile ? "Change Image" : currentImage ? "Update Image" : "Upload Image"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleImageChange}
-                />
+                <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
               </label>
               {imageFile && (
                 <p className="text-xs text-green-600 mt-2 font-medium">✓ {imageFile.name} selected — click Save to upload</p>
@@ -886,7 +978,6 @@ export function SettingsPage() {
             </div>
           </div>
 
-          {/* ── Other profile fields ────────────────────────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {loading ? (
               [...Array(5)].map((_, i) => <SkeletonField key={i} />)
@@ -951,6 +1042,90 @@ export function SettingsPage() {
         </div>
       )}
 
+      {/* ── Bank Details Tab ─────────────────────────────────────── */}
+      {activeTab === "Bank Details" && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-4">
+          <div className="flex items-center gap-3 mb-2">
+            <Building2 size={16} className="text-orange-400" />
+            <h2 className="text-sm font-bold text-gray-800">Bank Details</h2>
+          </div>
+
+          {hasBankDetails && (
+            <div className="bg-green-50 border border-green-200 text-green-700 text-xs px-4 py-3 rounded-xl">
+              ✓ Bank details saved. Payments will be tracked to your account automatically.
+            </div>
+          )}
+
+          <p className="text-xs text-gray-400">
+            Add your bank account details so your earnings can be tracked and paid out to you.
+          </p>
+
+          {/* Bank Selector */}
+          <div>
+            <label className="text-xs font-semibold text-gray-600 block mb-1">Select Bank</label>
+            <select
+              value={bankDetails.bankCode}
+              onChange={(e) => handleBankChange(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/30 bg-white appearance-none"
+            >
+              <option value="">-- Select your bank --</option>
+              {banks.map((bank) => (
+                <option key={bank.code} value={bank.code}>{bank.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Account Number */}
+          <div>
+            <label className="text-xs font-semibold text-gray-600 block mb-1">Account Number</label>
+            <input
+              type="text"
+              maxLength={10}
+              placeholder="Enter 10-digit account number"
+              value={bankDetails.bankAccountNumber}
+              onChange={(e) => handleAccountNumberChange(e.target.value.replace(/\D/g, ""))}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/30"
+            />
+          </div>
+
+          {/* Account Name — auto filled */}
+          <div>
+            <label className="text-xs font-semibold text-gray-600 block mb-1">Account Name</label>
+            <div className="relative">
+              <input
+                type="text"
+                readOnly
+                placeholder={resolving ? "Verifying account..." : "Will appear automatically after entering account number"}
+                value={bankDetails.accountName}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-gray-50 text-gray-700 focus:outline-none"
+              />
+              {resolving && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
+              )}
+            </div>
+            {bankDetails.accountName && !resolving && (
+              <p className="text-xs text-green-600 mt-1 font-medium">✓ Account verified — {bankDetails.accountName}</p>
+            )}
+          </div>
+
+          {bankError && (
+            <div className="bg-red-50 border border-red-200 text-red-600 text-xs px-4 py-3 rounded-xl">
+              {bankError}
+            </div>
+          )}
+
+          <button
+            onClick={handleSaveBankDetails}
+            disabled={savingBank || resolving || !bankDetails.accountName}
+            className="flex items-center gap-2 bg-[#F97316] text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-orange-600 transition-colors disabled:opacity-60"
+          >
+            <Save size={14} />
+            {savingBank ? "Saving..." : bankSaved ? "Saved!" : hasBankDetails ? "Update Bank Details" : "Save Bank Details"}
+          </button>
+        </div>
+      )}
+
+      {/* ── Notifications Tab ────────────────────────────────────── */}
       {activeTab === "Notifications" && (
         <div className="bg-white rounded-2xl border border-gray-100 p-6">
           <div className="flex items-center gap-3 mb-5">
@@ -981,6 +1156,7 @@ export function SettingsPage() {
         </div>
       )}
 
+      {/* ── Security Tab ─────────────────────────────────────────── */}
       {activeTab === "Security" && (
         <div className="bg-white rounded-2xl border border-gray-100 p-6">
           <div className="flex items-center gap-3 mb-5">
