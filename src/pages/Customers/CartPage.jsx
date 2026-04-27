@@ -38,8 +38,8 @@ const IconShoppingBag = ({ size = 48 }) => (
 );
 
 // ── Pricing ───────────────────────────────────────────────────────────────────
-const RIDER_FEE = { small: 500, medium: 1000, large: 1500 };
-const SERVICE_FEE = 600;
+const RIDER_FEE = { small: 100, medium: 100, large: 100 };
+const SERVICE_FEE = 100;
 
 const getHighestSize = (items) => {
   if (items.some(i => i.size === "large")) return "large";
