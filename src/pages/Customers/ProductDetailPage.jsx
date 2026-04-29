@@ -383,7 +383,7 @@ export default function ProductDetailPage({ onAddToCart }) {
               <div className="flex items-center gap-2 mb-3">
                 <StarDisplay rating={product.avgRating || 0} size={16} />
                 <span className="text-sm text-gray-500">
-                  {product.avgRating ? product.avgRating.toFixed(1) : "No ratings yet"}
+                  {product.avgRating ? Number(product.avgRating).toFixed(1) : "No ratings yet"}
                   {product.reviewCount > 0 && <span className="ml-1">({product.reviewCount} review{product.reviewCount !== 1 ? "s" : ""})</span>}
                 </span>
               </div>
