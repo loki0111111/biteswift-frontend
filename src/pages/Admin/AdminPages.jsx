@@ -201,9 +201,15 @@ function AddRiderModal({ onClose, onSuccess }) {
     const errs = validate();
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setLoading(true); setServerError("");
-    try { await addRider(form); onSuccess(); onClose(); }
-    catch (err) { setServerError(err.response?.data?.message || "Failed to add rider. Please try again."); }
-    finally { setLoading(false); }
+    try {
+      await addRider(form);
+      onClose();        // close first
+      onSuccess();      // then refresh
+    } catch (err) {
+      setServerError(err.response?.data?.message || "Failed to add rider. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
