@@ -66,6 +66,28 @@ const merchantStatusColor = { Active: "green", Busy: "orange", Offline: "gray", 
 // ============================================================
 // MERCHANTS PAGE — connected to real backend
 // ============================================================
+function DeactivateMerchantModal({ merchant, onConfirm, onCancel, loading }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+      <div className="bg-[#111111] border border-white/10 rounded-2xl p-6 max-w-sm w-full text-center">
+        <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+          <AlertCircle size={20} className="text-red-400" />
+        </div>
+        <h3 className="text-sm font-bold text-white mb-2">Deactivate Merchant?</h3>
+        <p className="text-white/40 text-xs mb-6">
+          Are you sure you want to deactivate <span className="text-white font-semibold">{merchant.name}</span>? Their products won't be visible to customers.
+        </p>
+        <div className="flex gap-3">
+          <button onClick={onCancel} className="flex-1 py-2.5 border border-white/10 rounded-xl text-white/40 font-semibold text-sm hover:bg-white/5">Cancel</button>
+          <button onClick={onConfirm} disabled={loading} className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 disabled:bg-red-500/50 text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2">
+            {loading ? <><Loader size={14} className="animate-spin" /> Deactivating...</> : "Yes, Deactivate"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MerchantsPage() {
   const [merchants, setMerchants] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +95,8 @@ export function MerchantsPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
   const [actionLoading, setActionLoading] = useState(null);
+  const [deactivateTarget, setDeactivateTarget] = useState(null);
+  const [deactivating, setDeactivating] = useState(false);
 
   const fetchMerchants = async () => {
     setLoading(true); setError("");
@@ -89,15 +113,15 @@ export function MerchantsPage() {
   useEffect(() => { fetchMerchants(); }, []);
 
   const handleDeactivateMerchant = async (id) => {
-    if (!window.confirm("Deactivate this merchant? Their products won't show to customers.")) return;
-    setActionLoading(id);
+    setDeactivating(true);
     try {
       await deactivateMerchant(id);
       setMerchants(prev => prev.map(m => m._id === id ? { ...m, status: "inactive", isActive: false } : m));
+      setDeactivateTarget(null);
     } catch {
       alert("Failed to deactivate merchant.");
     } finally {
-      setActionLoading(null);
+      setDeactivating(false);
     }
   };
 
@@ -179,7 +203,7 @@ export function MerchantsPage() {
                       {actionLoading === m._id ? (
                         <Loader size={14} className="animate-spin text-white/30" />
                       ) : m.isActive !== false ? (
-                        <button onClick={() => handleDeactivateMerchant(m._id)} className="p-1.5 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-all" title="Deactivate merchant">
+                        <button onClick={() => setDeactivateTarget(m)} className="p-1.5 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-all" title="Deactivate merchant">
                           <UserX size={14} />
                         </button>
                       ) : (
@@ -195,6 +219,14 @@ export function MerchantsPage() {
           </table>
         </div>
       </div>
+      {deactivateTarget && (
+        <DeactivateMerchantModal
+          merchant={deactivateTarget}
+          onConfirm={() => handleDeactivateMerchant(deactivateTarget._id)}
+          onCancel={() => setDeactivateTarget(null)}
+          loading={deactivating}
+        />
+      )}
     </div>
   );
 }
