@@ -8,6 +8,7 @@ import {
   ArrowUpRight, ArrowDownRight, Eye, Settings,
   Save, Shield, Plus, Filter, X, AlertCircle,
   Loader, Wallet, ArrowDownLeft, Building2,
+  UserX, UserCheck,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -19,6 +20,7 @@ import { getAdminAnalytics } from "../../services/analyticsService";
 import { getAllMerchants } from "../../services/merchantService";
 import { getFinanceOverview, getFinanceMerchants } from "../../services/financeService";
 import { getSettings, updateSettings } from "../../services/settingsService";
+import { deactivateMerchant, reactivateMerchant } from "../../services/merchantService";
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 function DarkBadge({ label, color }) {
@@ -70,6 +72,7 @@ export function MerchantsPage() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
+  const [actionLoading, setActionLoading] = useState(null);
 
   const fetchMerchants = async () => {
     setLoading(true); setError("");
@@ -84,6 +87,31 @@ export function MerchantsPage() {
   };
 
   useEffect(() => { fetchMerchants(); }, []);
+
+  const handleDeactivateMerchant = async (id) => {
+    if (!window.confirm("Deactivate this merchant? Their products won't show to customers.")) return;
+    setActionLoading(id);
+    try {
+      await deactivateMerchant(id);
+      setMerchants(prev => prev.map(m => m._id === id ? { ...m, status: "inactive", isActive: false } : m));
+    } catch {
+      alert("Failed to deactivate merchant.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleReactivateMerchant = async (id) => {
+    setActionLoading(id);
+    try {
+      await reactivateMerchant(id);
+      setMerchants(prev => prev.map(m => m._id === id ? { ...m, status: "active", isActive: true } : m));
+    } catch {
+      alert("Failed to reactivate merchant.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   if (loading) return <PageLoader />;
   if (error) return <PageError message={error} onRetry={fetchMerchants} />;
@@ -148,7 +176,17 @@ export function MerchantsPage() {
                     <td className="px-5 py-4"><DarkBadge label={status} color={merchantStatusColor[status]} /></td>
                     <td className="px-5 py-4 text-xs text-white/40">{m.joinedDate ? new Date(m.joinedDate).toLocaleDateString("en-NG", { month: "short", day: "numeric", year: "numeric" }) : "N/A"}</td>
                     <td className="px-5 py-4">
-                      <button className="p-1.5 bg-white/5 text-white/30 rounded-lg hover:bg-white/10 transition-all"><Eye size={14} /></button>
+                      {actionLoading === m._id ? (
+                        <Loader size={14} className="animate-spin text-white/30" />
+                      ) : m.isActive !== false ? (
+                        <button onClick={() => handleDeactivateMerchant(m._id)} className="p-1.5 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-all" title="Deactivate merchant">
+                          <UserX size={14} />
+                        </button>
+                      ) : (
+                        <button onClick={() => handleReactivateMerchant(m._id)} className="p-1.5 bg-green-500/10 text-green-400 rounded-lg hover:bg-green-500/20 transition-all" title="Reactivate merchant">
+                          <UserCheck size={14} />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
