@@ -50,6 +50,12 @@ import CustomerProtectedRoute from "./components/CustomerProtectedRoute";
 import PaymentCallbackPage from "./pages/Customers/PaymentCallbackPage";
 import ProductDetailPage from "./pages/Customers/ProductDetailPage";
 
+
+
+import RiderSetupPassword from "./pages/RiderSetupPassword";
+
+
+
 // ── Cart Conflict Modal ───────────────────────────────────────────────────────
 function CartConflictModal({ businessName, onConfirm, onCancel }) {
   return (
@@ -156,6 +162,8 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/setup-password" element={<SetupPassword />} />
+        <Route path="/setup-password" element={<SetupPassword />} />
+        <Route path="/rider/setup-password" element={<RiderSetupPassword />} />
 
         {/* ── Customer Auth Routes (no layout) ── */}
         <Route path="/order" element={<CustomerAuthPage />} />

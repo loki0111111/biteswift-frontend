@@ -13,7 +13,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend,
 } from "recharts";
-import { getAllRiders, getAllDeliveries, addRider, deactivateRider } from "../../services/riderService";
+import { getAllRiders, getAllDeliveries, addRider, deactivateRider, reactivateRider } from "../../services/riderService";
 import { getAdminWallet } from "../../services/walletService";
 import { getAdminAnalytics } from "../../services/analyticsService";
 import { getAllMerchants } from "../../services/merchantService";
@@ -164,26 +164,38 @@ export function MerchantsPage() {
 // ============================================================
 // FLEET PAGE — connected to real backend (unchanged)
 // ============================================================
-const getRiderStatus = (r) => { if (!r.isActive) return "Deactivated"; if (r.isAvailable) return "Idle"; return "Delivering"; };
-const getRiderStatusColor = (r) => { if (!r.isActive) return "gray"; if (r.isAvailable) return "yellow"; return "green"; };
+const getRiderStatus = (r) => {
+  const map = { Available: "Available", "On Delivery": "Delivering", Offline: "Offline", Deactivated: "Deactivated" };
+  return map[r.riderStatus] || "Offline";
+};
+
+const getRiderStatusColor = (r) => {
+  const map = { Available: "green", "On Delivery": "blue", Offline: "gray", Deactivated: "red" };
+  return map[r.riderStatus] || "gray";
+};
+
 const getDeliveryStatusColor = (s) => ({ "assigned": "yellow", "picked-up": "orange", "in-transit": "blue", "delivered": "green", "failed": "red" }[s] || "gray");
 
 function AddRiderModal({ onClose, onSuccess }) {
-  const [form, setForm] = useState({ name: "", phone: "", email: "", password: "", vehicleType: "motorcycle" });
+  const [form, setForm] = useState({ fullName: "", phoneNumber: "", email: "", vehicleType: "Motorcycle" });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState("");
-  const handleChange = (e) => { setForm({ ...form, [e.target.name]: e.target.value }); if (errors[e.target.name]) setErrors({ ...errors, [e.target.name]: "" }); };
+
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+    if (errors[e.target.name]) setErrors({ ...errors, [e.target.name]: "" });
+  };
+
   const validate = () => {
     const e = {};
-    if (!form.name.trim()) e.name = "Name is required";
-    if (!form.phone.trim()) e.phone = "Phone is required";
+    if (!form.fullName.trim()) e.fullName = "Name is required";
+    if (!form.phoneNumber.trim()) e.phoneNumber = "Phone is required";
     if (!form.email.trim()) e.email = "Email is required";
     else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = "Enter a valid email";
-    if (!form.password.trim()) e.password = "Password is required";
-    else if (form.password.length < 6) e.password = "Minimum 6 characters";
     return e;
   };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = validate();
@@ -193,6 +205,7 @@ function AddRiderModal({ onClose, onSuccess }) {
     catch (err) { setServerError(err.response?.data?.message || "Failed to add rider. Please try again."); }
     finally { setLoading(false); }
   };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
       <div className="bg-[#111111] border border-white/10 rounded-2xl w-full max-w-md">
@@ -201,19 +214,38 @@ function AddRiderModal({ onClose, onSuccess }) {
           <button onClick={onClose} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/40"><X size={14} /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {serverError && <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3"><AlertCircle size={14} className="text-red-400" /><p className="text-red-400 text-xs">{serverError}</p></div>}
-          {[{ label: "Full Name", name: "name", type: "text", placeholder: "e.g. Chukwu Emeka" }, { label: "Phone Number", name: "phone", type: "tel", placeholder: "e.g. 08012345678" }, { label: "Email Address", name: "email", type: "email", placeholder: "e.g. emeka@gmail.com" }, { label: "Password", name: "password", type: "password", placeholder: "Min. 6 characters" }].map(({ label, name, type, placeholder }) => (
+          {serverError && (
+            <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+              <AlertCircle size={14} className="text-red-400" />
+              <p className="text-red-400 text-xs">{serverError}</p>
+            </div>
+          )}
+          {[
+            { label: "Full Name", name: "fullName", type: "text", placeholder: "e.g. Chukwu Emeka" },
+            { label: "Phone Number", name: "phoneNumber", type: "tel", placeholder: "e.g. 08012345678" },
+            { label: "Email Address", name: "email", type: "email", placeholder: "e.g. emeka@gmail.com" },
+          ].map(({ label, name, type, placeholder }) => (
             <div key={name}>
               <label className="text-xs font-semibold text-white/40 block mb-1.5">{label}</label>
-              <input type={type} name={name} value={form[name]} onChange={handleChange} placeholder={placeholder} className={`w-full px-3 py-2.5 bg-white/5 border rounded-xl text-sm text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500/30 ${errors[name] ? "border-red-500/50" : "border-white/10"}`} />
+              <input
+                type={type} name={name} value={form[name]}
+                onChange={handleChange} placeholder={placeholder}
+                className={`w-full px-3 py-2.5 bg-white/5 border rounded-xl text-sm text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500/30 ${errors[name] ? "border-red-500/50" : "border-white/10"}`}
+              />
               {errors[name] && <p className="text-red-400 text-xs mt-1">{errors[name]}</p>}
             </div>
           ))}
           <div>
             <label className="text-xs font-semibold text-white/40 block mb-1.5">Vehicle Type</label>
             <select name="vehicleType" value={form.vehicleType} onChange={handleChange} className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 appearance-none">
-              <option value="bicycle">Bicycle</option><option value="motorcycle">Motorcycle</option><option value="car">Car</option>
+              <option value="Motorcycle">Motorcycle</option>
+              <option value="Bicycle">Bicycle</option>
+              <option value="Car">Car</option>
             </select>
+          </div>
+          <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-xl px-4 py-3">
+            <AlertCircle size={14} className="text-blue-400 shrink-0" />
+            <p className="text-blue-400 text-xs">Rider will receive an email to set up their own password.</p>
           </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-white/10 rounded-xl text-white/40 font-semibold text-sm hover:bg-white/5">Cancel</button>
@@ -233,7 +265,7 @@ function DeactivateModal({ rider, onConfirm, onCancel, loading }) {
       <div className="bg-[#111111] border border-white/10 rounded-2xl p-6 max-w-sm w-full text-center">
         <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4"><AlertCircle size={20} className="text-red-400" /></div>
         <h3 className="text-sm font-bold text-white mb-2">Deactivate Rider?</h3>
-        <p className="text-white/40 text-xs mb-6">Are you sure you want to deactivate <span className="text-white font-semibold">{rider.name}</span>? They will no longer receive deliveries.</p>
+        <p className="text-white/40 text-xs mb-6">Are you sure you want to deactivate <span className="text-white font-semibold">{rider.fullName}</span>? They will no longer receive deliveries.</p>
         <div className="flex gap-3">
           <button onClick={onCancel} className="flex-1 py-2.5 border border-white/10 rounded-xl text-white/40 font-semibold text-sm hover:bg-white/5">Cancel</button>
           <button onClick={onConfirm} disabled={loading} className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 disabled:bg-red-500/50 text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2">
@@ -260,23 +292,68 @@ export function FleetPage() {
     setLoading(true); setError("");
     try {
       const [ridersData, deliveriesData] = await Promise.all([getAllRiders(), getAllDeliveries()]);
-      setRiders(ridersData || []); setDeliveries(deliveriesData || []);
-    } catch (err) { setError("Failed to load fleet data. Please check your connection and try again."); }
-    finally { setLoading(false); }
+      setRiders(ridersData || []);
+      setDeliveries(deliveriesData || []);
+    } catch (err) {
+      setError("Failed to load fleet data. Please check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
   };
+
   useEffect(() => { fetchData(); }, []);
 
   const handleDeactivate = async () => {
     if (!deactivateTarget) return;
     setDeactivating(true);
-    try { const updated = await deactivateRider(deactivateTarget._id); setRiders((prev) => prev.map((r) => r._id === updated._id ? updated : r)); setDeactivateTarget(null); }
-    catch (err) { alert("Failed to deactivate rider. Please try again."); }
-    finally { setDeactivating(false); }
+    try {
+      const updated = await deactivateRider(deactivateTarget._id);
+      setRiders((prev) => prev.map((r) => r._id === updated._id ? updated : r));
+      setDeactivateTarget(null);
+    } catch (err) {
+      alert("Failed to deactivate rider. Please try again.");
+    } finally {
+      setDeactivating(false);
+    }
   };
 
-  const filteredRiders = riders.filter((r) => r.name?.toLowerCase().includes(search.toLowerCase()) || r.phone?.toLowerCase().includes(search.toLowerCase()) || r.email?.toLowerCase().includes(search.toLowerCase()));
-  const filteredDeliveries = deliveries.filter((d) => d.customerName?.toLowerCase().includes(search.toLowerCase()) || d.deliveryAddress?.toLowerCase().includes(search.toLowerCase()) || d.riderId?.name?.toLowerCase().includes(search.toLowerCase()));
-  const stats = [{ label: "Total Riders", value: riders.length }, { label: "Available Now", value: riders.filter(r => r.isAvailable && r.isActive).length }, { label: "Delivering", value: riders.filter(r => !r.isAvailable && r.isActive).length }, { label: "Deactivated", value: riders.filter(r => !r.isActive).length }];
+  const handleReactivate = async (riderId) => {
+    try {
+      const updated = await reactivateRider(riderId);
+      setRiders((prev) => prev.map((r) => r._id === updated._id ? updated : r));
+    } catch (err) {
+      alert("Failed to reactivate rider. Please try again.");
+    }
+  };
+
+  const getRiderStatus = (r) => {
+    const map = { Available: "Available", "On Delivery": "Delivering", Offline: "Offline", Deactivated: "Deactivated" };
+    return map[r.riderStatus] || "Offline";
+  };
+
+  const getRiderStatusColor = (r) => {
+    const map = { Available: "green", "On Delivery": "blue", Offline: "gray", Deactivated: "red" };
+    return map[r.riderStatus] || "gray";
+  };
+
+  const filteredRiders = riders.filter((r) =>
+    r.fullName?.toLowerCase().includes(search.toLowerCase()) ||
+    r.phoneNumber?.toLowerCase().includes(search.toLowerCase()) ||
+    r.email?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const filteredDeliveries = deliveries.filter((d) =>
+    d.customerName?.toLowerCase().includes(search.toLowerCase()) ||
+    d.deliveryAddress?.toLowerCase().includes(search.toLowerCase()) ||
+    d.riderId?.fullName?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const stats = [
+    { label: "Total Riders", value: riders.length },
+    { label: "Available Now", value: riders.filter(r => r.riderStatus === "Available").length },
+    { label: "Delivering", value: riders.filter(r => r.riderStatus === "On Delivery").length },
+    { label: "Deactivated", value: riders.filter(r => r.riderStatus === "Deactivated").length },
+  ];
 
   if (loading) return <PageLoader />;
   if (error) return <PageError message={error} onRetry={fetchData} />;
@@ -284,73 +361,123 @@ export function FleetPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <div><h1 className="text-xl font-bold text-white">Fleet Management</h1><p className="text-sm text-white/30 mt-0.5">Manage riders and track all deliveries</p></div>
-        <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 bg-[#F97316] hover:bg-orange-600 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-colors"><Plus size={14} /> Add Rider</button>
+        <div>
+          <h1 className="text-xl font-bold text-white">Fleet Management</h1>
+          <p className="text-sm text-white/30 mt-0.5">Manage riders and track all deliveries</p>
+        </div>
+        <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 bg-[#F97316] hover:bg-orange-600 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-colors">
+          <Plus size={14} /> Add Rider
+        </button>
       </div>
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {stats.map((s) => (<div key={s.label} className="bg-[#111111] border border-white/5 rounded-2xl p-4"><p className="text-2xl font-bold text-white">{s.value}</p><p className="text-xs text-white/30 mt-1">{s.label}</p></div>))}
+        {stats.map((s) => (
+          <div key={s.label} className="bg-[#111111] border border-white/5 rounded-2xl p-4">
+            <p className="text-2xl font-bold text-white">{s.value}</p>
+            <p className="text-xs text-white/30 mt-1">{s.label}</p>
+          </div>
+        ))}
       </div>
+
       <div className="flex gap-1 bg-[#111111] border border-white/5 rounded-2xl p-1 w-fit">
-        {["riders", "deliveries"].map((tab) => (<button key={tab} onClick={() => setActiveTab(tab)} className={`text-xs px-4 py-2 rounded-xl font-medium transition-all capitalize ${activeTab === tab ? "bg-[#F97316] text-white" : "text-white/40 hover:text-white"}`}>{tab} ({tab === "riders" ? riders.length : deliveries.length})</button>))}
+        {["riders", "deliveries"].map((tab) => (
+          <button key={tab} onClick={() => setActiveTab(tab)} className={`text-xs px-4 py-2 rounded-xl font-medium transition-all capitalize ${activeTab === tab ? "bg-[#F97316] text-white" : "text-white/40 hover:text-white"}`}>
+            {tab} ({tab === "riders" ? riders.length : deliveries.length})
+          </button>
+        ))}
       </div>
+
       <div className="bg-[#111111] border border-white/5 rounded-2xl p-4">
-        <div className="relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" /><input type="text" placeholder={activeTab === "riders" ? "Search by name, phone or email..." : "Search by customer, address or rider..."} value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white/70 placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500/30" /></div>
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" />
+          <input type="text" placeholder={activeTab === "riders" ? "Search by name, phone or email..." : "Search by customer, address or rider..."} value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white/70 placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+        </div>
       </div>
+
       {activeTab === "riders" && (
         filteredRiders.length === 0 ? (
-          <div className="bg-[#111111] border border-white/5 rounded-2xl p-12 text-center"><Bike size={32} className="text-white/10 mx-auto mb-3" /><p className="text-white/30 text-sm">{search ? "No riders match your search" : "No riders added yet"}</p>{!search && <button onClick={() => setShowAddModal(true)} className="mt-4 text-xs bg-[#F97316] text-white px-4 py-2 rounded-xl font-semibold hover:bg-orange-600">Add First Rider</button>}</div>
+          <div className="bg-[#111111] border border-white/5 rounded-2xl p-12 text-center">
+            <Bike size={32} className="text-white/10 mx-auto mb-3" />
+            <p className="text-white/30 text-sm">{search ? "No riders match your search" : "No riders added yet"}</p>
+            {!search && <button onClick={() => setShowAddModal(true)} className="mt-4 text-xs bg-[#F97316] text-white px-4 py-2 rounded-xl font-semibold hover:bg-orange-600">Add First Rider</button>}
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredRiders.map((r) => (
               <div key={r._id} className="bg-[#111111] border border-white/5 rounded-2xl p-5 hover:border-white/10 transition-all">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-white font-bold text-sm">{r.name?.[0]?.toUpperCase()}</div>
-                    <div><p className="text-sm font-bold text-white">{r.name}</p><div className="flex items-center gap-1 text-xs text-white/30"><Phone size={11} /><span>{r.phone}</span></div></div>
+                    <div className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                      {r.fullName?.[0]?.toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-white">{r.fullName}</p>
+                      <div className="flex items-center gap-1 text-xs text-white/30"><Phone size={11} /><span>{r.phoneNumber}</span></div>
+                    </div>
                   </div>
                   <DarkBadge label={getRiderStatus(r)} color={getRiderStatusColor(r)} />
                 </div>
                 <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="bg-white/3 rounded-xl p-3"><p className="text-xs text-white/30">Vehicle</p><p className="text-sm font-semibold text-white mt-0.5 capitalize">{r.vehicleType}</p></div>
-                  <div className="bg-white/3 rounded-xl p-3"><p className="text-xs text-white/30">Email</p><p className="text-xs font-semibold text-white mt-0.5 truncate">{r.email}</p></div>
+                  <div className="bg-white/3 rounded-xl p-3">
+                    <p className="text-xs text-white/30">Vehicle</p>
+                    <p className="text-sm font-semibold text-white mt-0.5 capitalize">{r.vehicleType}</p>
+                  </div>
+                  <div className="bg-white/3 rounded-xl p-3">
+                    <p className="text-xs text-white/30">Email</p>
+                    <p className="text-xs font-semibold text-white mt-0.5 truncate">{r.email}</p>
+                  </div>
                 </div>
                 <div className="pt-3 border-t border-white/5">
-                  {r.isActive ? <button onClick={() => setDeactivateTarget(r)} className="w-full text-xs bg-red-500/10 text-red-400 border border-red-500/20 px-3 py-2 rounded-xl font-semibold hover:bg-red-500/20">Deactivate Rider</button> : <p className="text-center text-xs text-white/20 py-1">Rider is deactivated</p>}
+                  {r.riderStatus !== "Deactivated"
+                    ? <button onClick={() => setDeactivateTarget(r)} className="w-full text-xs bg-red-500/10 text-red-400 border border-red-500/20 px-3 py-2 rounded-xl font-semibold hover:bg-red-500/20">Deactivate Rider</button>
+                    : <button onClick={() => handleReactivate(r._id)} className="w-full text-xs bg-green-500/10 text-green-400 border border-green-500/20 px-3 py-2 rounded-xl font-semibold hover:bg-green-500/20">Reactivate Rider</button>
+                  }
                 </div>
               </div>
             ))}
           </div>
         )
       )}
+
       {activeTab === "deliveries" && (
         <div className="bg-[#111111] border border-white/5 rounded-2xl overflow-hidden">
-          {filteredDeliveries.length === 0 ? <div className="p-12 text-center"><p className="text-white/30 text-sm">{search ? "No deliveries match your search" : "No deliveries found"}</p></div> : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead><tr className="border-b border-white/5">{["Customer", "Rider", "Address", "Restaurant", "Status", "Assigned At"].map((h) => (<th key={h} className="text-left text-xs font-semibold text-white/30 px-5 py-3">{h}</th>))}</tr></thead>
-                <tbody className="divide-y divide-white/5">
-                  {filteredDeliveries.map((d) => (
-                    <tr key={d._id} className="hover:bg-white/3 transition-colors">
-                      <td className="px-5 py-4"><p className="text-xs font-semibold text-white">{d.customerName}</p><p className="text-xs text-white/30">{d.customerPhone}</p></td>
-                      <td className="px-5 py-4"><p className="text-xs font-semibold text-white">{d.riderId?.name || "Unassigned"}</p><p className="text-xs text-white/30 capitalize">{d.riderId?.vehicleType || ""}</p></td>
-                      <td className="px-5 py-4"><p className="text-xs text-white/60 max-w-[160px] truncate">{d.deliveryAddress}</p></td>
-                      <td className="px-5 py-4"><p className="text-xs text-white/60">{d.businessId?.restaurantName || "N/A"}</p></td>
-                      <td className="px-5 py-4"><DarkBadge label={d.status} color={getDeliveryStatusColor(d.status)} /></td>
-                      <td className="px-5 py-4"><p className="text-xs text-white/40">{d.assignedAt ? new Date(d.assignedAt).toLocaleString() : "N/A"}</p></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          {filteredDeliveries.length === 0
+            ? <div className="p-12 text-center"><p className="text-white/30 text-sm">{search ? "No deliveries match your search" : "No deliveries found"}</p></div>
+            : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead><tr className="border-b border-white/5">{["Customer", "Rider", "Address", "Restaurant", "Status", "Assigned At"].map((h) => (<th key={h} className="text-left text-xs font-semibold text-white/30 px-5 py-3">{h}</th>))}</tr></thead>
+                  <tbody className="divide-y divide-white/5">
+                    {filteredDeliveries.map((d) => (
+                      <tr key={d._id} className="hover:bg-white/3 transition-colors">
+                        <td className="px-5 py-4"><p className="text-xs font-semibold text-white">{d.customerName}</p><p className="text-xs text-white/30">{d.customerPhone}</p></td>
+                        <td className="px-5 py-4"><p className="text-xs font-semibold text-white">{d.riderId?.fullName || "Unassigned"}</p><p className="text-xs text-white/30 capitalize">{d.riderId?.vehicleType || ""}</p></td>
+                        <td className="px-5 py-4"><p className="text-xs text-white/60 max-w-[160px] truncate">{d.deliveryAddress}</p></td>
+                        <td className="px-5 py-4"><p className="text-xs text-white/60">{d.businessId?.restaurantName || "N/A"}</p></td>
+                        <td className="px-5 py-4"><DarkBadge label={d.status} color={getDeliveryStatusColor(d.status)} /></td>
+                        <td className="px-5 py-4"><p className="text-xs text-white/40">{d.assignedAt ? new Date(d.assignedAt).toLocaleString() : "N/A"}</p></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          }
         </div>
       )}
+
       {showAddModal && <AddRiderModal onClose={() => setShowAddModal(false)} onSuccess={fetchData} />}
-      {deactivateTarget && <DeactivateModal rider={deactivateTarget} onConfirm={handleDeactivate} onCancel={() => setDeactivateTarget(null)} loading={deactivating} />}
+      {deactivateTarget && (
+        <DeactivateModal
+          rider={deactivateTarget}
+          onConfirm={handleDeactivate}
+          onCancel={() => setDeactivateTarget(null)}
+          loading={deactivating}
+        />
+      )}
     </div>
   );
 }
-
 // ============================================================
 // MARKETPLACE PAGE (static — no backend needed)
 // ============================================================
