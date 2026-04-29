@@ -197,20 +197,21 @@ function AddRiderModal({ onClose, onSuccess }) {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    const errs = validate();
-    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
-    setLoading(true); setServerError("");
-    try {
-      await addRider(form);
-      onClose();        // close first
-      onSuccess();      // then refresh
-    } catch (err) {
-      setServerError(err.response?.data?.message || "Failed to add rider. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  e.preventDefault();
+  const errs = validate();
+  if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+  setLoading(true);
+  setServerError("");
+  try {
+    await addRider(form);
+    setLoading(false);
+    onClose();
+    onSuccess();
+  } catch (err) {
+    setLoading(false);
+    setServerError(err.response?.data?.message || "Failed to add rider. Please try again.");
+  }
+};
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
