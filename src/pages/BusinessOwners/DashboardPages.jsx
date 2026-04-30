@@ -665,6 +665,31 @@ export function SettingsPage() {
     weeklyReport: true,
   });
 
+
+  const [savingNotifications, setSavingNotifications] = useState(false);
+  const [notifSaved, setNotifSaved] = useState(false);
+  
+  const saveNotifications = async () => {
+    setSavingNotifications(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/notification-preferences`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify(notifications),
+      });
+      if (!res.ok) throw new Error("Failed");
+      setNotifSaved(true);
+      setTimeout(() => setNotifSaved(false), 2000);
+    } catch {
+      alert("Failed to save preferences. Please try again.");
+    } finally {
+      setSavingNotifications(false);
+    }
+  };
+
   const [banks, setBanks] = useState([]);
   const [bankDetails, setBankDetails] = useState({
     bankAccountNumber: "",
@@ -706,6 +731,10 @@ export function SettingsPage() {
           businessType: data.businessType || "",
           image: data.image || "",
         });
+
+        if (data.notificationPreferences) {
+          setNotifications(data.notificationPreferences);
+        }
 
         if (data.bankAccountNumber) {
           setBankDetails({
@@ -1098,8 +1127,20 @@ export function SettingsPage() {
               </div>
             ))}
           </div>
+              {/* 👇 Add this button */}
+              <button
+                onClick={saveNotifications}
+                disabled={savingNotifications}
+                className="mt-5 flex items-center gap-2 bg-[#F97316] text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-orange-600 transition-colors disabled:opacity-60"
+              >
+                <Save size={14} />
+                {savingNotifications ? "Saving..." : notifSaved ? "Saved!" : "Save Preferences"}
+              </button>
         </div>
       )}
+
+
+      
 
       {/* ── Security Tab ─────────────────────────────────────────── */}
       {activeTab === "Security" && (
